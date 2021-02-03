@@ -1,48 +1,94 @@
-'use strict';
+'use strict'
+
+var net = require('net')
+var tls = require('tls')
+var Connection = require('mqtt-connection')
+
 /**
- * Testing requires
+ * MqttServer
+ *
+ * @param {Function} listener - fired on client connection
  */
+class MqttServer extends net.Server {
+  constructor (listener) {
+    super()
+    this.connectionList = []
 
-var server = require('../lib/server'),
-  Connection = require('mqtt-connection'),
-  mqtt = require('../');
+    var that = this
+    this.on('connection', function (duplex) {
+      this.connectionList.push(duplex)
+      var connection = new Connection(duplex, function () {
+        that.emit('client', connection)
+      })
+    })
 
-describe('MqttServer', function () {
-  it('should emit MqttServerClients', function (done) {
-    var s = new server.MqttServer();
-    s.listen(9877);
+    if (listener) {
+      this.on('client', listener)
+    }
+  }
+}
 
-    s.on('client', function (client) {
-      client.should.be.instanceOf(Connection);
-      done();
-    });
+/**
+ * MqttServerNoWait (w/o waiting for initialization)
+ *
+ * @param {Function} listener - fired on client connection
+ */
+class MqttServerNoWait extends net.Server {
+  constructor (listener) {
+    super()
+    this.connectionList = []
 
-    mqtt.createClient(9877);
-  });
+    this.on('connection', function (duplex) {
+      this.connectionList.push(duplex)
+      var connection = new Connection(duplex)
+      // do not wait for connection to return to send it to the client.
+      this.emit('client', connection)
+    })
 
-  it('should bind the stream\'s error in the clients', function (done) {
-    var s = new server.MqttServer();
-    s.listen(9878);
+    if (listener) {
+      this.on('client', listener)
+    }
+  }
+}
 
-    s.on('client', function (client) {
-      client.on('error', function () {
-        done();
-      });
-      client.stream.emit('error', new Error('bad idea!'));
-    });
+/**
+ * MqttSecureServer
+ *
+ * @param {Object} opts - server options
+ * @param {Function} listener
+ */
+class MqttSecureServer extends tls.Server {
+  constructor (opts, listener) {
+    if (typeof opts === 'function') {
+      listener = opts
+      opts = {}
+    }
 
-    mqtt.createClient(9878);
-  });
+    // sets a listener for the 'connection' event
+    super(opts)
+    this.connectionList = []
 
-  it('should bind the stream\'s close in the clients', function (done) {
-    var s = new server.MqttServer();
-    s.listen(9879);
+    this.on('secureConnection', function (socket) {
+      this.connectionList.push(socket)
+      var that = this
+      var connection = new Connection(socket, function () {
+        that.emit('client', connection)
+      })
+    })
 
-    s.on('client', function (client) {
-      client.on('close', done);
-      client.stream.emit('close');
-    });
+    if (listener) {
+      this.on('client', listener)
+    }
+  }
 
-    mqtt.createClient(9879);
-  });
-});
+  setupConnection (duplex) {
+    var that = this
+    var connection = new Connection(duplex, function () {
+      that.emit('client', connection)
+    })
+  }
+}
+
+exports.MqttServer = MqttServer
+exports.MqttServerNoWait = MqttServerNoWait
+exports.MqttSecureServer = MqttSecureServer

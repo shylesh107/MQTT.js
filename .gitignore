@@ -7,3 +7,15 @@ Session.vim
 .netrwhist
 *~
 npm-debug.log
+dist/
+yarn.lock
+coverage
+.nyc_output
+.idea/*
+test/typescript/.idea/*
+test/typescript/*.js
+test/typescript/*.map
+package-lock.json
+# VS Code stuff
+**/typings/**
+**/.vscode/**
